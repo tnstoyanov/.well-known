@@ -55,9 +55,192 @@
             color: #007aff;
             font-weight: 600;
         }
+
+        /* Apple Pay Button with Custom Text - Following Apple Guidelines */
+        @supports (-webkit-appearance: -apple-pay-button) {
+            .apple-pay-button-with-text {
+                display: inline-block;
+                -webkit-appearance: -apple-pay-button;
+                appearance: -apple-pay-button;
+                -apple-pay-button-type: top-up;
+                width: 200px;
+                height: 44px;
+                border: none;
+                cursor: pointer;
+                margin: 20px 0;
+                border-radius: 4px;
+            }
+            .apple-pay-button-with-text > * {
+                display: none;
+            }
+            .apple-pay-button-black-with-text {
+                -apple-pay-button-style: black;
+            }
+            .apple-pay-button-white-with-text {
+                -apple-pay-button-style: white;
+            }
+            .apple-pay-button-white-with-line-with-text {
+                -apple-pay-button-style: white-outline;
+            }
+        }
+
+        @supports not (-webkit-appearance: -apple-pay-button) {
+            .apple-pay-button-with-text {
+                --apple-pay-scale: 1.375; /* (44 / 32) for 44px height */
+                display: inline-flex;
+                justify-content: center;
+                align-items: center;
+                font-size: 12px;
+                border-radius: 5px;
+                padding: 0px;
+                box-sizing: border-box;
+                min-width: 200px;
+                width: 200px;
+                height: 44px;
+                cursor: pointer;
+                margin: 20px 0;
+            }
+            .apple-pay-button-black-with-text {
+                background-color: black;
+                color: white;
+            }
+            .apple-pay-button-white-with-text {
+                background-color: white;
+                color: black;
+            }
+            .apple-pay-button-white-with-line-with-text {
+                background-color: white;
+                color: black;
+                border: .5px solid black;
+            }
+            .apple-pay-button-with-text.apple-pay-button-black-with-text > .logo {
+                background-image: -webkit-named-image(apple-pay-logo-white);
+                background-color: black;
+            }
+            .apple-pay-button-with-text.apple-pay-button-white-with-text > .logo {
+                background-image: -webkit-named-image(apple-pay-logo-black);
+                background-color: white;
+            }
+            .apple-pay-button-with-text.apple-pay-button-white-with-line-with-text > .logo {
+                background-image: -webkit-named-image(apple-pay-logo-black);
+                background-color: white;
+            }
+            .apple-pay-button-with-text > .text {
+                font-family: -apple-system;
+                font-size: calc(1em * var(--apple-pay-scale));
+                font-weight: 300;
+                align-self: center;
+                margin-right: calc(2px * var(--apple-pay-scale));
+            }
+            .apple-pay-button-with-text > .logo {
+                width: calc(35px * var(--apple-pay-scale));
+                height: 100%;
+                background-size: 100% 60%;
+                background-repeat: no-repeat;
+                background-position: 0 50%;
+                margin-left: calc(2px * var(--apple-pay-scale));
+                border: none;
+            }
+        }
+
+        .apple-pay-button-with-text:hover {
+            opacity: 0.8;
+        }
+
+        .apple-pay-button-with-text:active {
+            opacity: 0.6;
+        }
+
+        /* Fallback for browsers that don't support -webkit-appearance */
+        .apple-pay-button-fallback {
+            background-color: #000;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: none;
+            width: 200px;
+            height: 44px;
+            line-height: 20px;
+        }
+
+        .apple-pay-section {
+            margin-top: 40px;
+            text-align: center;
+        }
     </style>
     <script type="text/javascript"
         src="https://cdn.safecharge.com/safecharge_resources/v1/sc_api_applepay.min.js"></script>
+    
+    <script>
+        // Check Apple Pay availability and show appropriate button
+        function checkApplePayAvailability() {
+            if (window.ApplePaySession && ApplePaySession.canMakePayments()) {
+                // Apple Pay is available
+                document.getElementById('apple-pay-button').style.display = 'inline-block';
+                document.getElementById('apple-pay-fallback').style.display = 'none';
+            } else {
+                // Apple Pay not available, show fallback
+                document.getElementById('apple-pay-button').style.display = 'none';
+                document.getElementById('apple-pay-fallback').style.display = 'inline-flex';
+            }
+        }
+
+        // Initialize Apple Pay session
+        function initiateApplePay() {
+            if (!window.ApplePaySession) {
+                alert('Apple Pay is not supported on this device/browser');
+                return;
+            }
+
+            // Apple Pay payment request configuration
+            const paymentRequest = {
+                countryCode: 'US',
+                currencyCode: 'USD',
+                supportedNetworks: ['visa', 'masterCard', 'amex', 'discover'],
+                merchantCapabilities: ['supports3DS'],
+                total: {
+                    label: 'Top Up Amount',
+                    amount: '25.00' // Default top-up amount
+                }
+            };
+
+            // Create Apple Pay session
+            const session = new ApplePaySession(3, paymentRequest);
+
+            // Handle merchant validation
+            session.onvalidatemerchant = function(event) {
+                console.log('Merchant validation required');
+                // This would typically make a call to your server to validate the merchant
+                // For demo purposes, we'll just log it
+            };
+
+            // Handle payment authorization
+            session.onpaymentauthorized = function(event) {
+                console.log('Payment authorized:', event.payment);
+                
+                // Here you would process the payment with Nuvei
+                // For demo purposes, we'll simulate success
+                session.completePayment(ApplePaySession.STATUS_SUCCESS);
+                
+                alert('Top Up successful! (Demo)');
+            };
+
+            // Handle cancellation
+            session.oncancel = function(event) {
+                console.log('Payment cancelled');
+            };
+
+            // Begin the session
+            session.begin();
+        }
+
+        // Check availability when page loads
+        document.addEventListener('DOMContentLoaded', checkApplePayAvailability);
+    </script>
 </head>
 
 <body>
@@ -68,8 +251,25 @@
             <p>Welcome to the <span class="highlight">Apple Pay Nuvei</span> integration page.</p>
             <p>This page serves as a demonstration of Apple Pay payment processing with Nuvei's secure payment platform.
             </p>
+            
+            <div class="apple-pay-section">
+                <h2>Top Up Your Account</h2>
+                <p>Use Apple Pay to quickly and securely add funds to your account.</p>
+                
+                <div id="apple-pay-button" class="apple-pay-button-with-text apple-pay-button-black-with-text" onclick="initiateApplePay()">
+                    <span class="text">Top Up with</span>
+                    <span class="logo"></span>
+                </div>
+                
+                <!-- Fallback button for non-Safari browsers -->
+                <button id="apple-pay-fallback" class="apple-pay-button-fallback">
+                    🍎 Top Up with Apple Pay
+                </button>
+            </div>
         </div>
+        
     </div>
+
 </body>
 
 </html>
