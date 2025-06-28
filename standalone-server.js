@@ -212,6 +212,53 @@ app.post('/api/open-order', async (req, res) => {
     }
 });
 
+app.post('/api/validate-merchant', async (req, res) => {
+    console.log('🍎 Apple Pay merchant validation requested');
+    
+    try {
+        const { validationURL, domainName } = req.body;
+        
+        if (!validationURL) {
+            return res.status(400).json({ 
+                error: 'Missing validationURL' 
+            });
+        }
+        
+        console.log(`🔐 Validation URL: ${validationURL}`);
+        console.log(`🌐 Domain: ${domainName}`);
+        
+        // For testing purposes, we'll return a mock validation response
+        // In production, you need to:
+        // 1. Have Apple Pay merchant certificates
+        // 2. Call Apple's validation endpoint with the certificates
+        // 3. Return the validation response
+        
+        // Mock validation response (this won't work for real payments)
+        const mockValidation = {
+            epochTimestamp: Date.now(),
+            expiresAt: Date.now() + 3600000, // 1 hour from now
+            merchantSessionIdentifier: `mock-session-${Date.now()}`,
+            nonce: `mock-nonce-${Math.random().toString(36).substring(7)}`,
+            merchantIdentifier: 'merchant.com.test.applepay',
+            domainName: domainName || 'localhost',
+            displayName: 'Test Apple Pay Store',
+            signature: 'mock-signature'
+        };
+        
+        console.log('⚠️  WARNING: Using mock merchant validation - this will not work for real payments');
+        console.log('📝 Mock validation:', JSON.stringify(mockValidation, null, 2));
+        
+        res.json(mockValidation);
+        
+    } catch (error) {
+        console.error('❌ Merchant validation failed:', error);
+        res.status(500).json({ 
+            error: 'Merchant validation failed',
+            message: error.message
+        });
+    }
+});
+
 app.post('/api/process-payment', async (req, res) => {
     console.log('💳 Process payment requested');
     

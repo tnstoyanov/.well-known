@@ -294,23 +294,84 @@
                 
                 session.onvalidatemerchant = async (event) => {
                     addDebugLog('APPLEPAY', `Merchant validation requested for: ${event.validationURL}`);
-                    // For testing, we'll skip merchant validation
-                    // In production, you'd need to implement this
+                    updateStatus('Validating merchant...', 'info');
+                    
                     try {
-                        session.completeMerchantValidation({});
-                        addDebugLog('APPLEPAY', 'Merchant validation completed (test mode)');
+                        // For testing purposes, we need to implement merchant validation
+                        // This requires calling Apple's validation endpoint with your merchant certificates
+                        
+                        // For now, let's try to get more info about the validation request
+                        addDebugLog('APPLEPAY', `Validation URL: ${event.validationURL}`);
+                        addDebugLog('APPLEPAY', 'Note: Merchant validation requires Apple Developer certificates');
+                        
+                        // Try to call our backend to handle merchant validation
+                        const validationResponse = await fetch(`${BACKEND_URL}/api/validate-merchant`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                validationURL: event.validationURL,
+                                domainName: window.location.hostname
+                            })
+                        });
+                        
+                        if (validationResponse.ok) {
+                            const validationData = await validationResponse.json();
+                            session.completeMerchantValidation(validationData);
+                            addDebugLog('APPLEPAY', 'Merchant validation completed successfully');
+                        } else {
+                            // Fallback - try with empty validation for testing
+                            addDebugLog('APPLEPAY', 'Merchant validation endpoint not implemented, trying fallback');
+                            session.completeMerchantValidation({
+                                merchantSessionIdentifier: 'test-session',
+                                nonce: 'test-nonce',
+                                merchantIdentifier: 'test-merchant',
+                                domainName: window.location.hostname,
+                                displayName: 'Test Store',
+                                signature: 'test-signature'
+                            });
+                        }
                     } catch (error) {
                         addDebugLog('ERROR', `Merchant validation failed: ${error.message}`);
+                        updateStatus(`Merchant validation failed: ${error.message}`, 'error');
                         session.abort();
                     }
                 };
                 
                 session.onpaymentauthorized = async (event) => {
                     addDebugLog('APPLEPAY', 'Payment authorized by user');
+                    updateStatus('Processing payment...', 'info');
                     
                     try {
                         const paymentData = event.payment;
-                        addDebugLog('APPLEPAY', `Payment data received: ${JSON.stringify(paymentData, null, 2)}`);
+                        addDebugLog('APPLEPAY', `Payment data structure: ${JSON.stringify(Object.keys(paymentData), null, 2)}`);
+                        
+                        // Log the token structure without sensitive data
+                        if (paymentData.token) {
+                            addDebugLog('APPLEPAY', `Token structure: ${JSON.stringify(Object.keys(paymentData.token), null, 2)}`);
+                            if (paymentData.token.paymentData) {
+                                addDebugLog('APPLEPAY', `PaymentData structure: ${JSON.stringify(Object.keys(paymentData.token.paymentData), null, 2)}`);
+                            }
+                        }
+                        
+                        // Log billing contact if available
+                        if (paymentData.billingContact) {
+                            addDebugLog('APPLEPAY', `Billing contact available: ${JSON.stringify(Object.keys(paymentData.billingContact), null, 2)}`);
+                        }
+                        
+                        // Extract the payment token in the format Nuvei expects
+                        let mobileToken;
+                        if (paymentData.token && paymentData.token.paymentData) {
+                            // Use the entire paymentData object as the mobile token
+                            mobileToken = JSON.stringify(paymentData.token.paymentData);
+                        } else if (paymentData.token) {
+                            // Fallback to the entire token
+                            mobileToken = JSON.stringify(paymentData.token);
+                        } else {
+                            throw new Error('No payment token found in Apple Pay response');
+                        }
+                        
+                        addDebugLog('APPLEPAY', `Mobile token length: ${mobileToken.length} characters`);
+                        addDebugLog('APPLEPAY', `Mobile token preview: ${mobileToken.substring(0, 100)}...`);
                         
                         // Step 3: Process payment with Nuvei
                         addDebugLog('API', 'Calling process-payment API...');
@@ -321,19 +382,22 @@
                             },
                             body: JSON.stringify({
                                 sessionToken: openOrderData.sessionToken,
-                                paymentData: JSON.stringify(paymentData.token),
+                                paymentData: mobileToken,
                                 billingContact: paymentData.billingContact,
                                 amount: parseFloat(amount)
                             })
                         });
                         
+                        addDebugLog('API', `Payment response status: ${paymentResponse.status}`);
+                        
                         if (!paymentResponse.ok) {
                             const errorText = await paymentResponse.text();
+                            addDebugLog('ERROR', `Payment response error: ${errorText}`);
                             throw new Error(`Payment processing failed: ${paymentResponse.status} ${errorText}`);
                         }
                         
                         const paymentResult = await paymentResponse.json();
-                        addDebugLog('API', `Payment result: ${JSON.stringify(paymentResult)}`);
+                        addDebugLog('API', `Payment result: ${JSON.stringify(paymentResult, null, 2)}`);
                         
                         if (paymentResult.success) {
                             session.completePayment(ApplePaySession.STATUS_SUCCESS);
@@ -341,12 +405,13 @@
                             addDebugLog('SUCCESS', `Payment completed successfully: ${paymentResult.transactionId}`);
                         } else {
                             session.completePayment(ApplePaySession.STATUS_FAILURE);
-                            updateStatus('Payment failed', 'error');
-                            addDebugLog('ERROR', 'Payment failed');
+                            updateStatus('Payment failed - check debug logs for details', 'error');
+                            addDebugLog('ERROR', `Payment failed: ${JSON.stringify(paymentResult)}`);
                         }
                         
                     } catch (error) {
                         addDebugLog('ERROR', `Payment processing error: ${error.message}`);
+                        addDebugLog('ERROR', `Error stack: ${error.stack}`);
                         session.completePayment(ApplePaySession.STATUS_FAILURE);
                         updateStatus(`Payment error: ${error.message}`, 'error');
                     }
