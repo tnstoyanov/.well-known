@@ -395,130 +395,81 @@
                     alert('🍎 Step 3: About to show Apple Pay overlay...');
                     console.log('🍎 Step 2: Showing Apple Pay overlay...');
                     
-                    // Check if Nuvei SDK is loaded
-                    if (typeof sfc === 'undefined' || !sfc.applePay) {
-                        throw new Error('Nuvei Apple Pay SDK not loaded');
+                    // Try native Apple Pay instead of Nuvei SDK
+                    if (!window.ApplePaySession) {
+                        throw new Error('Apple Pay not available on this device');
                     }
                     
-                    // Apple Pay overlay parameters
-                    let paymentRequest = {
-                        merchantSiteId: 184063,
-                        env: 'int',
-                        requiredBillingContactFields: ['postalAddress', 'name', 'phone', 'email'],
+                    // Native Apple Pay request
+                    const applePayRequest = {
                         countryCode: 'BG',
                         currencyCode: 'EUR',
+                        supportedNetworks: ['visa', 'masterCard', 'amex'],
+                        merchantCapabilities: ['supports3DS'],
                         total: {
                             label: 'Apple Pay Test topup',
                             amount: orderData.amount
-                        }
+                        },
+                        requiredBillingContactFields: ['postalAddress', 'name', 'email']
                     };
 
-                    // STEP 3: Process payment when Apple Pay completes
-                    let processPayment = function (applePayData, completion) {
-                        console.log('💳 Step 3: Processing payment with Apple Pay token...');
-                        console.log('🍎 Apple Pay data received:', JSON.stringify(applePayData, null, 2));
+                    alert('🍎 Step 4: Creating native Apple Pay session...');
+                    
+                    const session = new ApplePaySession(3, applePayRequest);
+                    
+                    session.onvalidatemerchant = function (event) {
+                        alert('🔐 Step 5: Apple Pay merchant validation needed...');
+                        console.log('🔐 Merchant validation event:', event);
+                        // For now, we'll skip merchant validation
+                        session.abort();
+                        alert('❌ Merchant validation not implemented yet');
+                    };
+                    
+                    session.onpaymentauthorized = function (event) {
+                        alert('✅ Step 6: Apple Pay authorized!');
+                        console.log('✅ Payment authorized:', event.payment);
                         
+                        // Process payment with our backend
                         const paymentPayload = {
                             sessionToken: orderData.sessionToken,
                             orderId: orderData.orderId,
-                            applePayToken: applePayData.token,
-                            billingContact: applePayData.billingContact,
+                            applePayToken: JSON.stringify(event.payment.token),
+                            billingContact: event.payment.billingContact,
                             amount: orderData.amount,
                             currency: orderData.currency
                         };
                         
-                        console.log('📤 Sending payment payload:', JSON.stringify(paymentPayload, null, 2));
-                        console.log('🔗 Payment URL:', `${currentBackendUrl}/api/process-payment`);
-
-                        // Send to payment processing endpoint
                         fetch(`${currentBackendUrl}/api/process-payment`, {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
+                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(paymentPayload)
                         })
-                        .then(response => {
-                            console.log('📥 Payment response status:', response.status);
-                            console.log('📥 Payment response headers:', Object.fromEntries(response.headers.entries()));
-                            
-                            if (!response.ok) {
-                                console.error(`❌ Payment HTTP error: ${response.status} ${response.statusText}`);
-                                return response.text().then(text => {
-                                    console.error('❌ Payment error response body:', text);
-                                    throw new Error(`Payment failed: ${response.status} - ${text}`);
-                                });
-                            }
-                            return response.text();
-                        })
-                        .then(responseText => {
-                            console.log('📥 Payment raw response:', responseText);
-                            try {
-                                const result = JSON.parse(responseText);
-                                console.log('💰 Payment result parsed:', JSON.stringify(result, null, 2));
-                                
-                                if (result.success && result.approved) {
-                                    console.log('✅ Payment approved!');
-                                    alert(`Payment successful! Transaction ID: ${result.transactionId}`);
-                                    completion(true);
-                                } else {
-                                    console.log('❌ Payment not approved:', result);
-                                    alert(`Payment failed: ${result.nuveiResponse?.reason || 'Unknown error'}`);
-                                    completion(false);
-                                }
-                            } catch (parseError) {
-                                console.error('❌ Failed to parse payment response:', parseError);
-                                console.error('❌ Raw response that failed to parse:', responseText);
-                                alert(`Payment error: Invalid response format`);
-                                completion(false);
+                        .then(response => response.json())
+                        .then(result => {
+                            console.log('Payment result:', result);
+                            if (result.success) {
+                                session.completePayment(ApplePaySession.STATUS_SUCCESS);
+                                alert('✅ Payment successful!');
+                            } else {
+                                session.completePayment(ApplePaySession.STATUS_FAILURE);
+                                alert('❌ Payment failed');
                             }
                         })
                         .catch(error => {
-                            console.error('❌ Payment request failed:', error);
-                            console.error('❌ Error details:', {
-                                name: error.name,
-                                message: error.message,
-                                stack: error.stack
-                            });
-                            alert(`Payment error: ${error.message}`);
-                            completion(false);
+                            console.error('Payment error:', error);
+                            session.completePayment(ApplePaySession.STATUS_FAILURE);
+                            alert(`❌ Payment error: ${error.message}`);
                         });
                     };
-
-                    // Initialize Apple Pay session
-                    let session = sfc.applePay.buildSession(paymentRequest, (result, completion) => {
-                        console.log('🍎 Apple Pay overlay completed with result');
-                        addDebugLog('APPLE_PAY_COMPLETE', 'Apple Pay overlay completed', result);
-                        
-                        try {
-                            processPayment(result, completion);
-                        } catch (error) {
-                            console.error('🚨 Error in processPayment:', error);
-                            addDebugLog('PROCESS_PAYMENT_ERROR', error.message, error);
-                            completion(false);
-                        }
-                    });
-
-                    // Optional session event handlers
-                    session.onshippingmethodselected = (event) => {
-                        console.log('merchant – onshippingmethodselected:', event);
-                        setTimeout(() => {
-                            session.completeShippingMethodSelection({
-                                newTotal: {
-                                    label: 'new amount',
-                                    amount: '115.94'
-                                }
-                            })
-                        }, 1000);
-                    };
-
-                    session.oncancel = (evt) => {
-                        console.log('Apple Pay cancelled:', evt);
-                    };
-
-                    // Show the Apple Pay overlay
-                    session.begin();
                     
+                    session.oncancel = function (event) {
+                        alert('❌ Apple Pay cancelled');
+                        console.log('Apple Pay cancelled:', event);
+                    };
+                    
+                    alert('🍎 Step 4: Starting Apple Pay session...');
+                    session.begin();
+
                 } catch (error) {
                     console.error('❌ Apple Pay flow error:', error);
                     alert(`Error: ${error.message}`);
