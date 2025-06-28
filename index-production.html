@@ -210,6 +210,11 @@
             
             updateDebugDisplay();
             
+            // Also show critical errors as alerts for iPhone debugging
+            if (type === 'ERROR' || type === 'GLOBAL_ERROR' || type === 'PROMISE_ERROR') {
+                alert(`🚨 ${type}: ${message}`);
+            }
+            
             // Send to remote logging (optional webhook)
             try {
                 const logPayload = {
@@ -350,6 +355,7 @@
             }
             
             applePayButton.addEventListener('click', async function () {
+                alert('🍎 Step 1: Apple Pay button clicked - Starting flow...');
                 console.log('🍎 Apple Pay button clicked - Starting flow...');
                 
                 // Get current backend URL
@@ -357,6 +363,7 @@
                 
                 try {
                     // STEP 1: Open order with Nuvei FIRST (before Apple Pay overlay)
+                    alert('🔓 Step 2: About to open order with Nuvei...');
                     console.log('🔓 Step 1: Opening order with Nuvei...');
                     
                     const openOrderResponse = await fetch(`${currentBackendUrl}/api/open-order`, {
@@ -371,17 +378,21 @@
                     });
                     
                     if (!openOrderResponse.ok) {
+                        alert(`❌ Step 2 FAILED: ${openOrderResponse.status}`);
                         throw new Error(`Failed to open order: ${openOrderResponse.status}`);
                     }
                     
                     const orderData = await openOrderResponse.json();
+                    alert('✅ Step 2 SUCCESS: Order opened');
                     console.log('✅ Order opened successfully:', orderData);
                     
                     if (!orderData.success || !orderData.sessionToken) {
+                        alert('❌ Step 2 FAILED: No session token');
                         throw new Error('Failed to get session token from Nuvei');
                     }
                     
                     // STEP 2: NOW show Apple Pay overlay (only after successful openOrder)
+                    alert('🍎 Step 3: About to show Apple Pay overlay...');
                     console.log('🍎 Step 2: Showing Apple Pay overlay...');
                     
                     // Check if Nuvei SDK is loaded
