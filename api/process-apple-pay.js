@@ -97,28 +97,58 @@ async function makeNuveiRequest(endpoint, payload) {
     console.log('📤 Request payload:', JSON.stringify(payload, null, 2));
     
     try {
-        // Use fetch directly - no dynamic import needed in Node.js 18+
+        // Use fetch with better error handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'User-Agent': 'ApplePayNuveiIntegration/1.0'
+                'User-Agent': 'ApplePayNuveiIntegration/1.0',
+                'Accept': 'application/json'
             },
             body: JSON.stringify(payload),
-            timeout: 10000 // 10 second timeout
+            signal: controller.signal
         });
         
-        const responseText = await response.text();
+        clearTimeout(timeoutId);
+        
         console.log(`📥 Response status: ${response.status}`);
+        console.log(`📥 Response headers:`, Object.fromEntries(response.headers.entries()));
+        
+        const responseText = await response.text();
         console.log('📥 Response text:', responseText);
         
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${responseText}`);
+            console.error(`❌ HTTP Error ${response.status}: ${response.statusText}`);
+            throw new Error(`HTTP ${response.status} ${response.statusText}: ${responseText}`);
         }
         
-        return JSON.parse(responseText);
+        // Try to parse JSON response
+        try {
+            const jsonResponse = JSON.parse(responseText);
+            console.log('✅ Successfully parsed JSON response');
+            return jsonResponse;
+        } catch (parseError) {
+            console.error('❌ Failed to parse JSON response:', parseError);
+            console.error('❌ Raw response text:', responseText);
+            throw new Error(`Invalid JSON response: ${parseError.message}`);
+        }
+        
     } catch (error) {
+        if (error.name === 'AbortError') {
+            console.error('❌ Request timed out after 15 seconds');
+            throw new Error('Request timed out - Nuvei API did not respond within 15 seconds');
+        }
+        
         console.error('❌ Nuvei API request failed:', error);
+        console.error('❌ Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        });
+        
         throw error;
     }
 }
@@ -202,7 +232,23 @@ export default async function handler(req, res) {
         
         console.log('🔓 Opening order with Nuvei...');
         console.log('📤 About to send openOrder request with params:', JSON.stringify(openOrderParams, null, 2));
-        const openOrderResponse = await makeNuveiRequest('openOrder', openOrderParams);
+        
+        let openOrderResponse;
+        try {
+            openOrderResponse = await makeNuveiRequest('openOrder', openOrderParams);
+            console.log('✅ openOrder request completed successfully');
+        } catch (openOrderError) {
+            console.error('❌ openOrder request failed:', openOrderError);
+            return res.status(500).json({ 
+                error: 'Failed to communicate with Nuvei openOrder API',
+                message: openOrderError.message,
+                details: {
+                    url: `${NUVEI_CONFIG.baseUrl}/openOrder.do`,
+                    payload: openOrderParams,
+                    errorType: openOrderError.name || 'Unknown'
+                }
+            });
+        }
         
         if (openOrderResponse.status !== 'SUCCESS') {
             console.error('❌ Failed to open order:', openOrderResponse);

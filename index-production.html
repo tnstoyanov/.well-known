@@ -198,107 +198,132 @@
                 return;
             }
             
-            applePayButton.addEventListener('click', function () {
-                console.log('Apple Pay button clicked');
-                
-                // Check if Nuvei SDK is loaded
-                if (typeof sfc === 'undefined' || !sfc.applePay) {
-                    console.error('Nuvei Apple Pay SDK not loaded');
-                    alert('Payment system not ready. Please refresh the page and try again.');
-                    return;
-                }
+            applePayButton.addEventListener('click', async function () {
+                console.log('🍎 Apple Pay button clicked - Starting flow...');
                 
                 // Get current backend URL
                 const currentBackendUrl = document.getElementById('backend-url').value;
                 
-                /* create initial apple pay overlay parameters */
-                let paymentRequest = {
-                    merchantSiteId: 184063, // Nuvei merchant site ID
-                    env: 'int', // Nuvei API environment - 'int' (integration = sandbox) or 'prod' (production)
-                    requiredBillingContactFields: ['postalAddress', 'name', 'phone', 'email'],
-                    countryCode: 'BG',
-                    currencyCode: 'EUR',
-                    total: {
-                        label: 'Apple Pay Test topup',
-                        amount: '100.00'
-                    }
-                };
-
-                /* custom function that sends data to backend server */
-                let processPayment = function (applePayData, completion) {
-                    // Prepare data to send to backend
-                    const paymentData = {
-                        paymentData: applePayData.token,
-                        billingContact: applePayData.billingContact,
-                        amount: paymentRequest.total.amount,
-                        currency: paymentRequest.currencyCode,
-                        timestamp: new Date().toISOString()
-                    };
-
-                    console.log('Sending payment data to backend:', paymentData);
-
-                    // Send to backend endpoint
-                    fetch(`${currentBackendUrl}/api/process-apple-pay`, {
+                try {
+                    // STEP 1: Open order with Nuvei FIRST (before Apple Pay overlay)
+                    console.log('🔓 Step 1: Opening order with Nuvei...');
+                    
+                    const openOrderResponse = await fetch(`${currentBackendUrl}/api/open-order`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify(paymentData)
-                    })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        return response.json();
-                    })
-                    .then(result => {
-                        console.log('Payment result:', result);
-                        // Call completion with success/failure
-                        if (result.status === 'APPROVED' || result.transactionStatus === 'APPROVED') {
-                            alert('Payment successful! Transaction ID: ' + (result.transactionId || 'N/A'));
-                            completion(true);
-                        } else {
-                            alert('Payment failed: ' + (result.error || 'Unknown error'));
-                            completion(false);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Payment error:', error);
-                        alert('Payment error: ' + error.message);
-                        completion(false);
+                        body: JSON.stringify({
+                            amount: '100.00',
+                            currency: 'EUR'
+                        })
                     });
-                };
-
-                /* initialize session by calling sfc.applePay.buildSession, 
-                a function defined in the external js file provided by Nuvei */
-                let session = sfc.applePay.buildSession(paymentRequest, (result, completion) => {
-                    console.log('Apple Pay result received:', result);
                     
-                    /* Process payment with Nuvei backend */
-                    processPayment(result, completion);
-                });
+                    if (!openOrderResponse.ok) {
+                        throw new Error(`Failed to open order: ${openOrderResponse.status}`);
+                    }
+                    
+                    const orderData = await openOrderResponse.json();
+                    console.log('✅ Order opened successfully:', orderData);
+                    
+                    if (!orderData.success || !orderData.sessionToken) {
+                        throw new Error('Failed to get session token from Nuvei');
+                    }
+                    
+                    // STEP 2: NOW show Apple Pay overlay (only after successful openOrder)
+                    console.log('🍎 Step 2: Showing Apple Pay overlay...');
+                    
+                    // Check if Nuvei SDK is loaded
+                    if (typeof sfc === 'undefined' || !sfc.applePay) {
+                        throw new Error('Nuvei Apple Pay SDK not loaded');
+                    }
+                    
+                    // Apple Pay overlay parameters
+                    let paymentRequest = {
+                        merchantSiteId: 184063,
+                        env: 'int',
+                        requiredBillingContactFields: ['postalAddress', 'name', 'phone', 'email'],
+                        countryCode: 'BG',
+                        currencyCode: 'EUR',
+                        total: {
+                            label: 'Apple Pay Test topup',
+                            amount: orderData.amount
+                        }
+                    };
 
-                /* you can define optional handlers of various events in session,
-                for example: onshippingmethodselected, onshippingcontactselected,
-                onpaymentmethodselected, oncancel */
-                session.onshippingmethodselected = (event) => {
-                    console.log('merchant – onshippingmethodselected:', event);
-                    setTimeout(() => {
-                        session.completeShippingMethodSelection({
-                            newTotal: {
-                                label: 'new amount',
-                                amount: '115.94'
+                    // STEP 3: Process payment when Apple Pay completes
+                    let processPayment = function (applePayData, completion) {
+                        console.log('💳 Step 3: Processing payment with Apple Pay token...');
+                        console.log('Apple Pay data received:', applePayData);
+
+                        // Send to payment processing endpoint
+                        fetch(`${currentBackendUrl}/api/process-payment`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                sessionToken: orderData.sessionToken,
+                                orderId: orderData.orderId,
+                                applePayToken: applePayData.token,
+                                billingContact: applePayData.billingContact,
+                                amount: orderData.amount,
+                                currency: orderData.currency
+                            })
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`Payment failed: ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(result => {
+                            console.log('💰 Payment result:', result);
+                            if (result.success && result.approved) {
+                                alert(`Payment successful! Transaction ID: ${result.transactionId}`);
+                                completion(true);
+                            } else {
+                                alert(`Payment failed: ${result.nuveiResponse?.reason || 'Unknown error'}`);
+                                completion(false);
                             }
                         })
-                    }, 1000);
-                };
+                        .catch(error => {
+                            console.error('Payment error:', error);
+                            alert(`Payment error: ${error.message}`);
+                            completion(false);
+                        });
+                    };
 
-                session.oncancel = (evt) => {
-                    console.log('cancelled', evt)
-                };
+                    // Initialize Apple Pay session
+                    let session = sfc.applePay.buildSession(paymentRequest, (result, completion) => {
+                        console.log('🍎 Apple Pay overlay completed:', result);
+                        processPayment(result, completion);
+                    });
 
-                /* overlay is triggered*/
-                session.begin();
+                    // Optional session event handlers
+                    session.onshippingmethodselected = (event) => {
+                        console.log('merchant – onshippingmethodselected:', event);
+                        setTimeout(() => {
+                            session.completeShippingMethodSelection({
+                                newTotal: {
+                                    label: 'new amount',
+                                    amount: '115.94'
+                                }
+                            })
+                        }, 1000);
+                    };
+
+                    session.oncancel = (evt) => {
+                        console.log('Apple Pay cancelled:', evt);
+                    };
+
+                    // Show the Apple Pay overlay
+                    session.begin();
+                    
+                } catch (error) {
+                    console.error('❌ Apple Pay flow error:', error);
+                    alert(`Error: ${error.message}`);
+                }
             });
         }
     </script>
