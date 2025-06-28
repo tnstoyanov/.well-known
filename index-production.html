@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Pay Nuvei</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 40px;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .apple-pay-logo {
+            background: linear-gradient(135deg, #000 0%, #333 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .content {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: #6e6e73;
+            margin-bottom: 20px;
+        }
+
+        /* Apple Pay Button Styles */
+        @supports (-webkit-appearance: -apple-pay-button) {
+            .apple-pay-button-with-text {
+                display: inline-block;
+                -webkit-appearance: -apple-pay-button;
+                appearance: -apple-pay-button;
+                -apple-pay-button-type: top-up;
+                width: 200px;
+                height: 44px;
+                border-radius: 4px;
+                margin: 20px 0;
+            }
+            .apple-pay-button-with-text > * {
+                display: none;
+            }
+            .apple-pay-button-black-with-text {
+                -apple-pay-button-style: black;
+            }
+        }
+
+        @supports not (-webkit-appearance: -apple-pay-button) {
+            .apple-pay-button-with-text {
+                display: inline-flex;
+                justify-content: center;
+                align-items: center;
+                font-size: 16px;
+                border-radius: 5px;
+                width: 200px;
+                height: 44px;
+                cursor: pointer;
+                margin: 20px 0;
+                background-color: black;
+                color: white;
+            }
+            .apple-pay-button-with-text > .text {
+                font-family: -apple-system;
+                font-size: 18px;
+                font-weight: 300;
+                margin-right: 6px;
+            }
+            .apple-pay-button-with-text > .logo {
+                width: 48px;
+                height: 100%;
+                background-size: 100% 60%;
+                background-repeat: no-repeat;
+                background-position: 0 50%;
+                border: none;
+            }
+        }
+
+        .apple-pay-button-with-text:hover {
+            opacity: 0.8;
+        }
+
+        .apple-pay-button-with-text:active {
+            opacity: 0.6;
+        }
+
+        .apple-pay-button-fallback {
+            background-color: #000;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: none;
+            width: 450px;
+            height: 100px;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .apple-pay-section {
+            margin-top: 40px;
+            text-align: center;
+        }
+        .tiebreak-logo {
+            display: block;
+            margin: 0 auto 24px auto;
+            max-width: 180px;
+        }
+
+        .config-section {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .config-section h3 {
+            margin-top: 0;
+            color: #007aff;
+        }
+
+        .config-input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+    <script type="text/javascript"
+        src="https://cdn.safecharge.com/safecharge_resources/v1/sc_api_applepay.min.js"></script>
+    
+    <script>
+        // Configuration - Update this with your deployed backend URL
+        const BACKEND_URL = 'https://your-backend-url.vercel.app'; // Replace with your actual backend URL
+        
+        // Simple availability check for Apple Pay button display
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up backend URL configuration
+            setupBackendConfig();
+            
+            // Check Apple Pay availability
+            if (window.ApplePaySession && ApplePaySession.canMakePayments()) {
+                document.getElementById('apple-pay-button').style.display = 'inline-block';
+                document.getElementById('apple-pay-fallback').style.display = 'none';
+            } else {
+                document.getElementById('apple-pay-button').style.display = 'none';
+                document.getElementById('apple-pay-fallback').style.display = 'flex';
+            }
+            
+            // Set up Apple Pay button handler
+            setupApplePayButton();
+        });
+        
+        function setupBackendConfig() {
+            const backendInput = document.getElementById('backend-url');
+            backendInput.value = BACKEND_URL;
+            
+            backendInput.addEventListener('change', function() {
+                console.log('Backend URL updated to:', this.value);
+            });
+        }
+        
+        function setupApplePayButton() {
+            const applePayButton = document.getElementById('apple-pay-button');
+            
+            if (!applePayButton) {
+                console.error('Apple Pay button not found');
+                return;
+            }
+            
+            applePayButton.addEventListener('click', function () {
+                console.log('Apple Pay button clicked');
+                
+                // Check if Nuvei SDK is loaded
+                if (typeof sfc === 'undefined' || !sfc.applePay) {
+                    console.error('Nuvei Apple Pay SDK not loaded');
+                    alert('Payment system not ready. Please refresh the page and try again.');
+                    return;
+                }
+                
+                // Get current backend URL
+                const currentBackendUrl = document.getElementById('backend-url').value;
+                
+                /* create initial apple pay overlay parameters */
+                let paymentRequest = {
+                    merchantSiteId: 184063, // Nuvei merchant site ID
+                    env: 'int', // Nuvei API environment - 'int' (integration = sandbox) or 'prod' (production)
+                    requiredBillingContactFields: ['postalAddress', 'name', 'phone', 'email'],
+                    countryCode: 'BG',
+                    currencyCode: 'EUR',
+                    total: {
+                        label: 'Apple Pay Test topup',
+                        amount: '100.00'
+                    }
+                };
+
+                /* custom function that sends data to backend server */
+                let processPayment = function (applePayData, completion) {
+                    // Prepare data to send to backend
+                    const paymentData = {
+                        mobileToken: applePayData.token,
+                        billingContact: applePayData.billingContact,
+                        amount: paymentRequest.total.amount,
+                        currency: paymentRequest.currencyCode,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    console.log('Sending payment data to backend:', paymentData);
+
+                    // Send to backend endpoint
+                    fetch(`${currentBackendUrl}/process-apple-pay`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(paymentData)
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(result => {
+                        console.log('Payment result:', result);
+                        // Call completion with success/failure
+                        if (result.status === 'APPROVED' || result.transactionStatus === 'APPROVED') {
+                            alert('Payment successful! Transaction ID: ' + (result.transactionId || 'N/A'));
+                            completion(true);
+                        } else {
+                            alert('Payment failed: ' + (result.error || 'Unknown error'));
+                            completion(false);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Payment error:', error);
+                        alert('Payment error: ' + error.message);
+                        completion(false);
+                    });
+                };
+
+                /* initialize session by calling sfc.applePay.buildSession, 
+                a function defined in the external js file provided by Nuvei */
+                let session = sfc.applePay.buildSession(paymentRequest, (result, completion) => {
+                    console.log('Apple Pay result received:', result);
+                    
+                    /* Process payment with Nuvei backend */
+                    processPayment(result, completion);
+                });
+
+                /* you can define optional handlers of various events in session,
+                for example: onshippingmethodselected, onshippingcontactselected,
+                onpaymentmethodselected, oncancel */
+                session.onshippingmethodselected = (event) => {
+                    console.log('merchant – onshippingmethodselected:', event);
+                    setTimeout(() => {
+                        session.completeShippingMethodSelection({
+                            newTotal: {
+                                label: 'new amount',
+                                amount: '115.94'
+                            }
+                        })
+                    }, 1000);
+                };
+
+                session.oncancel = (evt) => {
+                    console.log('cancelled', evt)
+                };
+
+                /* overlay is triggered*/
+                session.begin();
+            });
+        }
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <img src="img/tiebreakLogo.png" alt="Tiebreak Logo" class="tiebreak-logo" />
+
+        <h1><span class="apple-pay-logo">Apple Pay</span> Nuvei Demo</h1>
+
+        <div class="config-section">
+            <h3>🔧 Configuration</h3>
+            <label for="backend-url">Backend URL:</label>
+            <input type="text" id="backend-url" class="config-input" placeholder="https://your-backend-url.vercel.app">
+            <p><small>Update this with your deployed backend URL (Vercel, Railway, etc.)</small></p>
+        </div>
+
+        <div class="content">            
+            <div class="apple-pay-section">
+                <h2>Top Up Your Account</h2>
+                <p>Use Apple Pay to quickly and securely add funds to your account.</p>
+                
+                <div id="apple-pay-button" class="apple-pay-button-with-text apple-pay-button-black-with-text">
+                    <span class="text">Top Up with</span>
+                    <span class="logo"></span>
+                </div>
+                
+                <!-- Fallback message for non-Safari browsers -->
+                <div id="apple-pay-fallback" class="apple-pay-button-fallback">
+                    You need Safari on iOS/macOS to test Apple Pay. Please open this page on an iPhone or Mac.
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+</body>
+
+</html>
