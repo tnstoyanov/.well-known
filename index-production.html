@@ -228,7 +228,7 @@
                 let processPayment = function (applePayData, completion) {
                     // Prepare data to send to backend
                     const paymentData = {
-                        mobileToken: applePayData.token,
+                        paymentData: applePayData.token,
                         billingContact: applePayData.billingContact,
                         amount: paymentRequest.total.amount,
                         currency: paymentRequest.currencyCode,
@@ -238,7 +238,7 @@
                     console.log('Sending payment data to backend:', paymentData);
 
                     // Send to backend endpoint
-                    fetch(`${currentBackendUrl}/process-apple-pay`, {
+                    fetch(`${currentBackendUrl}/api/process-apple-pay`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

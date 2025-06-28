@@ -1,23 +1,7 @@
 {
   "version": 2,
-  "name": "apple-pay-nuvei-backend",
-  "builds": [
-    {
-      "src": "server.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/server.js"
-    }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  },
   "functions": {
-    "server.js": {
+    "api/*.js": {
       "maxDuration": 30
     }
   }
