@@ -58,10 +58,8 @@ function calculateOpenOrderChecksum(merchantId, merchantSiteId, clientRequestId,
 }
 
 // Utility function to calculate checksum for payment (specific order for payment API)
-function calculatePaymentChecksum(sessionToken, merchantId, merchantSiteId, clientRequestId, amount, currency, timeStamp, secretKey) {
-    // For payment API, the order might be different. Let's try the most common pattern:
-    // sessionToken, merchantId, merchantSiteId, clientRequestId, amount, currency, timeStamp, secretKey
-    const sessionTokenStr = String(sessionToken);
+function calculatePaymentChecksum(merchantId, merchantSiteId, clientRequestId, amount, currency, timeStamp, secretKey) {
+    // For payment API, use the same order as openOrder: merchantId, merchantSiteId, clientRequestId, amount, currency, timeStamp, merchantSecretKey
     const merchantIdStr = String(merchantId);
     const merchantSiteIdStr = String(merchantSiteId);
     const clientRequestIdStr = String(clientRequestId);
@@ -70,10 +68,9 @@ function calculatePaymentChecksum(sessionToken, merchantId, merchantSiteId, clie
     const timeStampStr = String(timeStamp);
     const secretKeyStr = String(secretKey);
     
-    const concatenated = sessionTokenStr + merchantIdStr + merchantSiteIdStr + clientRequestIdStr + amountStr + currencyStr + timeStampStr + secretKeyStr;
+    const concatenated = merchantIdStr + merchantSiteIdStr + clientRequestIdStr + amountStr + currencyStr + timeStampStr + secretKeyStr;
     
     console.log('🔐 Checksum calculation for payment:');
-    console.log(`   sessionToken: "${sessionTokenStr}"`);
     console.log(`   merchantId: "${merchantIdStr}"`);
     console.log(`   merchantSiteId: "${merchantSiteIdStr}"`);
     console.log(`   clientRequestId: "${clientRequestIdStr}"`);
@@ -306,7 +303,6 @@ export default async function handler(req, res) {
         
         // Calculate payment checksum with the correct parameters
         paymentParams.checksum = calculatePaymentChecksum(
-            sessionToken,
             NUVEI_CONFIG.merchantId,
             NUVEI_CONFIG.merchantSiteId,
             paymentClientRequestId,
