@@ -1,17 +1,34 @@
-  /* define a button handler */
-document.getElementById('apple-pay-button').addEventListener('click', function () {
-    /* create initial apple pay overlay parameters */
-    let paymentRequest = {
-        merchantSiteId: 184063, // Nuvei merchant site ID
-        env: 'int', // Nuvei API environment - 'int' (integration = sandbox) or 'prod' (production)
-        requiredBillingContactFields: ['postalAddress', 'name', 'phone', 'email'],
-        countryCode: 'BG',
-        currencyCode: 'EUR',
-        total: {
-            label: 'Apple Pay Test topup',
-            amount: '100.00'
+/* define a button handler */
+document.addEventListener('DOMContentLoaded', function() {
+    const applePayButton = document.getElementById('apple-pay-button');
+    
+    if (!applePayButton) {
+        console.error('Apple Pay button not found');
+        return;
+    }
+    
+    applePayButton.addEventListener('click', function () {
+        console.log('Apple Pay button clicked');
+        
+        // Check if Nuvei SDK is loaded
+        if (typeof sfc === 'undefined' || !sfc.applePay) {
+            console.error('Nuvei Apple Pay SDK not loaded');
+            alert('Payment system not ready. Please refresh the page and try again.');
+            return;
         }
-    };
+        
+        /* create initial apple pay overlay parameters */
+        let paymentRequest = {
+            merchantSiteId: 184063, // Nuvei merchant site ID
+            env: 'int', // Nuvei API environment - 'int' (integration = sandbox) or 'prod' (production)
+            requiredBillingContactFields: ['postalAddress', 'name', 'phone', 'email'],
+            countryCode: 'BG',
+            currencyCode: 'EUR',
+            total: {
+                label: 'Apple Pay Test topup',
+                amount: '100.00'
+            }
+        };
     /* custom function that sends data to backend server */
     let processPayment = function (applePayData, completion) {
         // Prepare data to send to backend
@@ -25,8 +42,8 @@ document.getElementById('apple-pay-button').addEventListener('click', function (
 
         console.log('Sending payment data to backend:', paymentData);
 
-        // Send to local backend endpoint (change URL for production)
-        fetch('http://localhost:3000/process-apple-pay', {
+        // Send to same server that's serving the frontend (localhost:8080)
+        fetch('/process-apple-pay', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -87,4 +104,5 @@ document.getElementById('apple-pay-button').addEventListener('click', function (
 
     /* overlay is triggered*/
     session.begin();
+    });
 });

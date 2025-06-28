@@ -16,43 +16,49 @@ This project implements a complete Apple Pay integration with Nuvei payment proc
 
 ## Setup Instructions
 
-### 1. Install Backend Dependencies
+### 1. Install Dependencies
 
 ```bash
 cd /Users/tonystoyanov/Documents/ApplePayNuvei/.well-known
 npm install
 ```
 
-### 2. Start the Backend Server
+### 2. Generate HTTPS Certificates (Required for Apple Pay)
+
+Apple Pay requires HTTPS connections. Generate self-signed certificates for development:
+
+**Option A - Using the setup script:**
+```bash
+./setup-https.sh
+```
+
+**Option B - Manual generation:**
+```bash
+npm run generate-cert
+```
+
+**Option C - Using OpenSSL directly:**
+```bash
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost"
+```
+
+### 3. Start the Server
 
 ```bash
 npm start
 ```
 
-The backend server will start on `http://localhost:3000`
+This will start both HTTP (port 3001) and HTTPS (port 3443) servers.
 
-### 3. Serve the Frontend
+### 4. Access the Application
 
-You can use any static file server to serve the HTML file. For example:
+**For Apple Pay testing (REQUIRED):**
+- Open Safari and navigate to: `https://localhost:3443`
+- You'll see a security warning about the self-signed certificate
+- Click "Advanced" then "Proceed to localhost (unsafe)"
 
-```bash
-# Using Python 3
-python3 -m http.server 8080
-
-# Using Node.js http-server (install globally: npm install -g http-server)
-http-server -p 8080
-
-# Using VS Code Live Server extension
-# Right-click on index.html and select "Open with Live Server"
-```
-
-### 4. Test the Integration
-
-1. Open Safari (Apple Pay only works in Safari on iOS/macOS)
-2. Navigate to `http://localhost:8080/index.html`
-3. Click the "Top Up with Apple Pay" button
-4. Complete the Apple Pay authentication
-5. The payment will be processed through Nuvei's test environment
+**For basic testing (Apple Pay won't work):**
+- Open any browser and navigate to: `http://localhost:3001`
 
 ## Configuration
 
