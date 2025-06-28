@@ -117,8 +117,8 @@
             font-weight: 600;
             cursor: pointer;
             display: none;
-            width: 200px;
-            height: 44px;
+            width: 450px;
+            height: 100px;
         }
 
         .apple-pay-section {
@@ -211,10 +211,10 @@
                     <span class="logo"></span>
                 </div>
                 
-                <!-- Fallback button for non-Safari browsers -->
-                <button id="apple-pay-fallback" class="apple-pay-button-fallback">
-                    🍎 Top Up with Apple Pay
-                </button>
+                <!-- Fallback message for non-Safari browsers -->
+                <div id="apple-pay-fallback" class="apple-pay-button-fallback" style="display: none; align-items: center; justify-content: center; text-align: center;">
+                    You need a Safari browser to run Apple Pay. Please close this one and open the URL in your Safari browser.
+                </div>
             </div>
         </div>
         
