@@ -2,17 +2,8 @@
 document.getElementById('apple-pay-button').addEventListener('click', function () {
     /* create initial apple pay overlay parameters */
     let paymentRequest = {
-        merchantSiteId: 184063, // use your own merchant site ID provided by Nuvei
-        env: 'int', // Nuvei API environment - 'int' (integration) or 'prod' (production - default if omitted)
-        applicationData: "RGVtbyBzaXRl",  // use your own 64-bit encoded data
-        // merchantCapabilities : ['supports3DS','supportsCredit'] //optional
-        // optional overwrite of the default ['supports3DS'] //optional
-        // supportedNetworks: ['discover', 'visa', 'masterCard'] //optional
-      /*
-        optional could be overwritten, default value is 
-        ['amex', 'chinaUnionPay', 'privateLabel', 'discover', 'visa', 'masterCard', 'jcb'], 
-        you can request only debit cards or only credit cards otherwise all are allowed 
-      */
+        merchantSiteId: 184063, // Nuvei merchant site ID
+        env: 'int', // Nuvei API environment - 'int' (integration = sandbox) or 'prod' (production)
         requiredBillingContactFields: ['postalAddress', 'name', 'phone', 'email'],
         countryCode: 'BG',
         currencyCode: 'EUR',
@@ -21,44 +12,58 @@ document.getElementById('apple-pay-button').addEventListener('click', function (
             amount: '100.00'
         }
     };
-    /* custom function that sends data to server */
-    let postTransactionData = function (url, trxData, callback) {
-        let xhr = new XMLHttpRequest();
-        xhr.open('POST', url, true);
-        xhr.setRequestHeader('Content-type', 'application/json; charset=UTF-8');
-        xhr.onload = function () {
-            if (xhr.readyState === 4) {
-                let data = {};
-                try {
-                    data = JSON.parse(this.responseText);
-                } catch (e) {
-                }
-                callback (data);
+    /* custom function that sends data to backend server */
+    let processPayment = function (applePayData, completion) {
+        // Prepare data to send to backend
+        const paymentData = {
+            mobileToken: applePayData.token,
+            billingContact: applePayData.billingContact,
+            amount: paymentRequest.total.amount,
+            currency: paymentRequest.currencyCode,
+            timestamp: new Date().toISOString()
+        };
+
+        console.log('Sending payment data to backend:', paymentData);
+
+        // Send to local backend endpoint (change URL for production)
+        fetch('http://localhost:3000/process-apple-pay', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(paymentData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        };
-        let reject = function () {
-            callback({});
-        };
-        xhr.onerror = reject;
-        xhr.timeout = 30000;
-        xhr.ontimeout = reject;
-        xhr.send(JSON.stringify(trxData));
+            return response.json();
+        })
+        .then(result => {
+            console.log('Payment result:', result);
+            // Call completion with success/failure
+            if (result.status === 'APPROVED' || result.transactionStatus === 'APPROVED') {
+                alert('Payment successful! Transaction ID: ' + (result.transactionId || 'N/A'));
+                completion(true);
+            } else {
+                alert('Payment failed: ' + (result.error || 'Unknown error'));
+                completion(false);
+            }
+        })
+        .catch(error => {
+            console.error('Payment error:', error);
+            alert('Payment error: ' + error.message);
+            completion(false);
+        });
     };
 
     /* initialize session by calling sfc.applePay.buildSession, 
     a function defined in the external js file provided by Nuvei */
     let session = sfc.applePay.buildSession(paymentRequest, (result, completion) => {
-        /* postTransactionData is a function that calls server with provided data 
-        using Nuvei API and callback receives status from server */
-        postTransactionData(uploadUrl, result, function (srvResult) {
-            // depending on status returned, completion method should be called with true or false
-            if (srvResult.transactionStatus && srvResult.transactionStatus === 'APPROVED') {
-                completion(true);
-            } else {
-                completion(false);
-            }
-        })
-        //session.abort();
+        console.log('Apple Pay result received:', result);
+        
+        /* Process payment with Nuvei backend */
+        processPayment(result, completion);
     });
 
     /* you can define optional handlers of various events in session,
