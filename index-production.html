@@ -155,6 +155,33 @@
             border-radius: 4px;
             font-family: monospace;
         }
+
+        .debug-section {
+            background: #000;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .debug-section h3 {
+            color: #00ffff;
+            margin-top: 0;
+        }
+
+        .clear-logs {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
     </style>
     <script type="text/javascript"
         src="https://cdn.safecharge.com/safecharge_resources/v1/sc_api_applepay.min.js"></script>
@@ -162,6 +189,83 @@
     <script>
         // Configuration - Update this with your deployed backend URL
         const BACKEND_URL = 'https://apple-pay-nuvei-dynamic.vercel.app'; // ✅ Updated with your Vercel domain
+        
+        // Debug logging system
+        const debugLogs = [];
+        const maxLogs = 100;
+        
+        function addDebugLog(type, message, data = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = {
+                timestamp,
+                type,
+                message,
+                data
+            };
+            
+            debugLogs.push(logEntry);
+            if (debugLogs.length > maxLogs) {
+                debugLogs.shift();
+            }
+            
+            updateDebugDisplay();
+            
+            // Send to remote logging (optional webhook)
+            try {
+                fetch('https://34028ab3c57f9867b19b64a815e6a373.m.pipedream.net', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        source: 'iPhone-Frontend',
+                        timestamp: new Date().toISOString(),
+                        type,
+                        message,
+                        data
+                    })
+                }).catch(() => {}); // Silent fail for logging
+            } catch (e) {
+                // Silent fail for logging
+            }
+        }
+        
+        function updateDebugDisplay() {
+            const debugDiv = document.getElementById('debug-logs');
+            if (!debugDiv) return;
+            
+            debugDiv.innerHTML = debugLogs.map(log => {
+                const dataStr = log.data ? JSON.stringify(log.data, null, 2) : '';
+                return `<div>[${log.timestamp}] ${log.type}: ${log.message}${dataStr ? '<br><pre>' + dataStr + '</pre>' : ''}</div>`;
+            }).join('');
+            
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+        }
+        
+        function clearDebugLogs() {
+            debugLogs.length = 0;
+            updateDebugDisplay();
+        }
+        
+        // Override console methods to capture logs
+        const originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn
+        };
+        
+        console.log = function(...args) {
+            originalConsole.log.apply(console, args);
+            addDebugLog('LOG', args.join(' '));
+        };
+        
+        console.error = function(...args) {
+            originalConsole.error.apply(console, args);
+            addDebugLog('ERROR', args.join(' '));
+        };
+        
+        console.warn = function(...args) {
+            originalConsole.warn.apply(console, args);
+            addDebugLog('WARN', args.join(' '));
+        };
         
         // Simple availability check for Apple Pay button display
         document.addEventListener('DOMContentLoaded', function() {
@@ -254,7 +358,19 @@
                     // STEP 3: Process payment when Apple Pay completes
                     let processPayment = function (applePayData, completion) {
                         console.log('💳 Step 3: Processing payment with Apple Pay token...');
-                        console.log('Apple Pay data received:', applePayData);
+                        console.log('🍎 Apple Pay data received:', JSON.stringify(applePayData, null, 2));
+                        
+                        const paymentPayload = {
+                            sessionToken: orderData.sessionToken,
+                            orderId: orderData.orderId,
+                            applePayToken: applePayData.token,
+                            billingContact: applePayData.billingContact,
+                            amount: orderData.amount,
+                            currency: orderData.currency
+                        };
+                        
+                        console.log('📤 Sending payment payload:', JSON.stringify(paymentPayload, null, 2));
+                        console.log('🔗 Payment URL:', `${currentBackendUrl}/api/process-payment`);
 
                         // Send to payment processing endpoint
                         fetch(`${currentBackendUrl}/api/process-payment`, {
@@ -262,33 +378,50 @@
                             headers: {
                                 'Content-Type': 'application/json',
                             },
-                            body: JSON.stringify({
-                                sessionToken: orderData.sessionToken,
-                                orderId: orderData.orderId,
-                                applePayToken: applePayData.token,
-                                billingContact: applePayData.billingContact,
-                                amount: orderData.amount,
-                                currency: orderData.currency
-                            })
+                            body: JSON.stringify(paymentPayload)
                         })
                         .then(response => {
+                            console.log('📥 Payment response status:', response.status);
+                            console.log('📥 Payment response headers:', Object.fromEntries(response.headers.entries()));
+                            
                             if (!response.ok) {
-                                throw new Error(`Payment failed: ${response.status}`);
+                                console.error(`❌ Payment HTTP error: ${response.status} ${response.statusText}`);
+                                return response.text().then(text => {
+                                    console.error('❌ Payment error response body:', text);
+                                    throw new Error(`Payment failed: ${response.status} - ${text}`);
+                                });
                             }
-                            return response.json();
+                            return response.text();
                         })
-                        .then(result => {
-                            console.log('💰 Payment result:', result);
-                            if (result.success && result.approved) {
-                                alert(`Payment successful! Transaction ID: ${result.transactionId}`);
-                                completion(true);
-                            } else {
-                                alert(`Payment failed: ${result.nuveiResponse?.reason || 'Unknown error'}`);
+                        .then(responseText => {
+                            console.log('📥 Payment raw response:', responseText);
+                            try {
+                                const result = JSON.parse(responseText);
+                                console.log('💰 Payment result parsed:', JSON.stringify(result, null, 2));
+                                
+                                if (result.success && result.approved) {
+                                    console.log('✅ Payment approved!');
+                                    alert(`Payment successful! Transaction ID: ${result.transactionId}`);
+                                    completion(true);
+                                } else {
+                                    console.log('❌ Payment not approved:', result);
+                                    alert(`Payment failed: ${result.nuveiResponse?.reason || 'Unknown error'}`);
+                                    completion(false);
+                                }
+                            } catch (parseError) {
+                                console.error('❌ Failed to parse payment response:', parseError);
+                                console.error('❌ Raw response that failed to parse:', responseText);
+                                alert(`Payment error: Invalid response format`);
                                 completion(false);
                             }
                         })
                         .catch(error => {
-                            console.error('Payment error:', error);
+                            console.error('❌ Payment request failed:', error);
+                            console.error('❌ Error details:', {
+                                name: error.name,
+                                message: error.message,
+                                stack: error.stack
+                            });
                             alert(`Payment error: ${error.message}`);
                             completion(false);
                         });
@@ -340,6 +473,12 @@
             <label for="backend-url">Backend URL:</label>
             <input type="text" id="backend-url" class="config-input" placeholder="https://apple-pay-nuvei-dynamic.vercel.app">
             <p><small>Update this with your deployed backend URL (Vercel, Railway, etc.)</small></p>
+        </div>
+
+        <div class="debug-section">
+            <h3>🐛 Debug Console</h3>
+            <button class="clear-logs" onclick="clearDebugLogs()">Clear Logs</button>
+            <div id="debug-logs"></div>
         </div>
 
         <div class="content">            
