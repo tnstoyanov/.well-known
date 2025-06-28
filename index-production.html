@@ -212,16 +212,19 @@
             
             // Send to remote logging (optional webhook)
             try {
+                const logPayload = {
+                    source: 'iPhone-Frontend',
+                    timestamp: new Date().toISOString(),
+                    type,
+                    message,
+                    data: data ? (typeof data === 'object' ? JSON.stringify(data) : String(data)) : null
+                };
+                
                 fetch('https://34028ab3c57f9867b19b64a815e6a373.m.pipedream.net', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        source: 'iPhone-Frontend',
-                        timestamp: new Date().toISOString(),
-                        type,
-                        message,
-                        data
-                    })
+                    body: JSON.stringify(logPayload),
+                    mode: 'no-cors' // This might help with CORS issues
                 }).catch(() => {}); // Silent fail for logging
             } catch (e) {
                 // Silent fail for logging
@@ -245,7 +248,7 @@
             updateDebugDisplay();
         }
         
-        // Override console methods to capture logs
+        // Override console methods to capture logs (safer version)
         const originalConsole = {
             log: console.log,
             error: console.error,
@@ -253,22 +256,64 @@
         };
         
         console.log = function(...args) {
-            originalConsole.log.apply(console, args);
-            addDebugLog('LOG', args.join(' '));
+            try {
+                originalConsole.log.apply(console, args);
+                addDebugLog('LOG', args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '));
+            } catch (e) {
+                originalConsole.log.apply(console, args);
+            }
         };
         
         console.error = function(...args) {
-            originalConsole.error.apply(console, args);
-            addDebugLog('ERROR', args.join(' '));
+            try {
+                originalConsole.error.apply(console, args);
+                addDebugLog('ERROR', args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '));
+            } catch (e) {
+                originalConsole.error.apply(console, args);
+            }
         };
         
         console.warn = function(...args) {
-            originalConsole.warn.apply(console, args);
-            addDebugLog('WARN', args.join(' '));
+            try {
+                originalConsole.warn.apply(console, args);
+                addDebugLog('WARN', args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '));
+            } catch (e) {
+                originalConsole.warn.apply(console, args);
+            }
         };
+        
+        // Global error handlers
+        window.addEventListener('error', function(event) {
+            console.error('🚨 Global Error:', event.error);
+            addDebugLog('GLOBAL_ERROR', `${event.filename}:${event.lineno} - ${event.message}`);
+        });
+        
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('🚨 Unhandled Promise Rejection:', event.reason);
+            addDebugLog('PROMISE_ERROR', String(event.reason));
+        });
         
         // Simple availability check for Apple Pay button display
         document.addEventListener('DOMContentLoaded', function() {
+            // Test logging immediately
+            console.log('🔥 PAGE LOADED - Testing logging system...');
+            addDebugLog('INFO', 'Page loaded successfully');
+            
+            // Test webhook immediately
+            fetch('https://34028ab3c57f9867b19b64a815e6a373.m.pipedream.net', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source: 'iPhone-Frontend-Test',
+                    message: 'Testing webhook connection',
+                    timestamp: new Date().toISOString()
+                })
+            }).then(() => {
+                console.log('✅ Webhook test sent successfully');
+            }).catch(err => {
+                console.error('❌ Webhook test failed:', err);
+            });
+            
             // Set up backend URL configuration
             setupBackendConfig();
             
@@ -276,9 +321,11 @@
             if (window.ApplePaySession && ApplePaySession.canMakePayments()) {
                 document.getElementById('apple-pay-button').style.display = 'inline-block';
                 document.getElementById('apple-pay-fallback').style.display = 'none';
+                console.log('✅ Apple Pay is available');
             } else {
                 document.getElementById('apple-pay-button').style.display = 'none';
                 document.getElementById('apple-pay-fallback').style.display = 'flex';
+                console.log('❌ Apple Pay not available');
             }
             
             // Set up Apple Pay button handler
@@ -429,8 +476,16 @@
 
                     // Initialize Apple Pay session
                     let session = sfc.applePay.buildSession(paymentRequest, (result, completion) => {
-                        console.log('🍎 Apple Pay overlay completed:', result);
-                        processPayment(result, completion);
+                        console.log('🍎 Apple Pay overlay completed with result');
+                        addDebugLog('APPLE_PAY_COMPLETE', 'Apple Pay overlay completed', result);
+                        
+                        try {
+                            processPayment(result, completion);
+                        } catch (error) {
+                            console.error('🚨 Error in processPayment:', error);
+                            addDebugLog('PROCESS_PAYMENT_ERROR', error.message, error);
+                            completion(false);
+                        }
                     });
 
                     // Optional session event handlers
