@@ -27,8 +27,26 @@ function generateTimestamp() {
            now.getSeconds().toString().padStart(2, '0');
 }
 
-// Utility function to calculate checksum
-function calculateChecksum(params, secretKey) {
+// Utility function to calculate checksum for openOrder
+function calculateOpenOrderChecksum(merchantId, merchantSiteId, clientRequestId, amount, currency, timeStamp, secretKey) {
+    // Concatenate in exact order: merchantId, merchantSiteId, clientRequestId, amount, currency, timeStamp, merchantSecretKey
+    const concatenated = merchantId + merchantSiteId + clientRequestId + amount + currency + timeStamp + secretKey;
+    console.log('🔐 Checksum calculation for openOrder:');
+    console.log(`   merchantId: ${merchantId}`);
+    console.log(`   merchantSiteId: ${merchantSiteId}`);
+    console.log(`   clientRequestId: ${clientRequestId}`);
+    console.log(`   amount: ${amount}`);
+    console.log(`   currency: ${currency}`);
+    console.log(`   timeStamp: ${timeStamp}`);
+    console.log(`   secretKey: ${secretKey}`);
+    console.log(`   concatenated: ${concatenated}`);
+    const checksum = crypto.createHash('sha256').update(concatenated, 'utf8').digest('hex');
+    console.log(`   checksum: ${checksum}`);
+    return checksum;
+}
+
+// Utility function to calculate checksum for payment (different order)
+function calculatePaymentChecksum(params, secretKey) {
     const sortedKeys = Object.keys(params).sort();
     const concatenated = sortedKeys.map(key => params[key]).join('') + secretKey;
     return crypto.createHash('sha256').update(concatenated, 'utf8').digest('hex');
@@ -42,14 +60,15 @@ async function makeNuveiRequest(endpoint, payload) {
     console.log('📤 Request payload:', JSON.stringify(payload, null, 2));
     
     try {
-        const fetch = (await import('node-fetch')).default;
+        // Use fetch directly - no dynamic import needed in Node.js 18+
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'User-Agent': 'ApplePayNuveiIntegration/1.0'
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            timeout: 10000 // 10 second timeout
         });
         
         const responseText = await response.text();
@@ -103,23 +122,41 @@ export default async function handler(req, res) {
             });
         }
         
+        console.log('✅ Basic validation passed');
+        console.log(`💰 Processing payment of ${amount} with data: ${paymentData.substring(0, 20)}...`);
+        
         // Generate unique order ID
         const timestamp = generateTimestamp();
         const orderId = `apple-pay-${timestamp}-${Math.random().toString(36).substring(2, 8)}`;
         
         console.log(`📝 Generated order ID: ${orderId}`);
+        console.log(`⏰ Timestamp: ${timestamp}`);
         
         // Step 1: Open Order with Nuvei
+        const clientRequestId = `${orderId}-open`;
+        const openOrderAmount = amount.toString();
+        const currency = "USD";
+        
+        // Calculate checksum in the exact order specified
+        const openOrderChecksum = calculateOpenOrderChecksum(
+            NUVEI_CONFIG.merchantId,
+            NUVEI_CONFIG.merchantSiteId, 
+            clientRequestId,
+            openOrderAmount,
+            currency,
+            timestamp,
+            NUVEI_CONFIG.merchantSecretKey
+        );
+        
         const openOrderParams = {
             merchantId: NUVEI_CONFIG.merchantId,
             merchantSiteId: NUVEI_CONFIG.merchantSiteId,
-            clientRequestId: `${orderId}-open`,
-            amount: amount.toString(),
-            currency: "USD",
-            timeStamp: timestamp
+            clientRequestId: clientRequestId,
+            amount: openOrderAmount,
+            currency: currency,
+            timeStamp: timestamp,
+            checksum: openOrderChecksum
         };
-        
-        openOrderParams.checksum = calculateChecksum(openOrderParams, NUVEI_CONFIG.merchantSecretKey);
         
         console.log('🔓 Opening order with Nuvei...');
         const openOrderResponse = await makeNuveiRequest('openOrder', openOrderParams);
@@ -172,7 +209,7 @@ export default async function handler(req, res) {
             }
         }
         
-        paymentParams.checksum = calculateChecksum(paymentParams, NUVEI_CONFIG.merchantSecretKey);
+        paymentParams.checksum = calculatePaymentChecksum(paymentParams, NUVEI_CONFIG.merchantSecretKey);
         
         console.log('💳 Processing payment with Nuvei...');
         const paymentResponse = await makeNuveiRequest('payment', paymentParams);
