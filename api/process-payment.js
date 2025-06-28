@@ -28,8 +28,8 @@ function generateTimestamp() {
 }
 
 // Utility function to calculate checksum for payment
-function calculatePaymentChecksum(sessionToken, merchantId, merchantSiteId, clientRequestId, amount, currency, timeStamp, secretKey) {
-    const sessionTokenStr = String(sessionToken);
+function calculatePaymentChecksum(merchantId, merchantSiteId, clientRequestId, amount, currency, timeStamp, secretKey) {
+    // For payment API, use the same order as openOrder: merchantId, merchantSiteId, clientRequestId, amount, currency, timeStamp, merchantSecretKey
     const merchantIdStr = String(merchantId);
     const merchantSiteIdStr = String(merchantSiteId);
     const clientRequestIdStr = String(clientRequestId);
@@ -38,9 +38,16 @@ function calculatePaymentChecksum(sessionToken, merchantId, merchantSiteId, clie
     const timeStampStr = String(timeStamp);
     const secretKeyStr = String(secretKey);
     
-    const concatenated = sessionTokenStr + merchantIdStr + merchantSiteIdStr + clientRequestIdStr + amountStr + currencyStr + timeStampStr + secretKeyStr;
+    const concatenated = merchantIdStr + merchantSiteIdStr + clientRequestIdStr + amountStr + currencyStr + timeStampStr + secretKeyStr;
     
     console.log('🔐 Checksum calculation for payment:');
+    console.log(`   merchantId: "${merchantIdStr}"`);
+    console.log(`   merchantSiteId: "${merchantSiteIdStr}"`);
+    console.log(`   clientRequestId: "${clientRequestIdStr}"`);
+    console.log(`   amount: "${amountStr}"`);
+    console.log(`   currency: "${currencyStr}"`);
+    console.log(`   timeStamp: "${timeStampStr}"`);
+    console.log(`   secretKey: "${secretKeyStr}"`);
     console.log(`   concatenated: "${concatenated}"`);
     
     const checksum = crypto.createHash('sha256').update(concatenated, 'utf8').digest('hex');
@@ -167,9 +174,8 @@ export default async function handler(req, res) {
             };
         }
         
-        // Calculate payment checksum
+        // Calculate payment checksum (same order as openOrder: merchantId, merchantSiteId, clientRequestId, amount, currency, timeStamp, merchantSecretKey)
         paymentParams.checksum = calculatePaymentChecksum(
-            sessionToken,
             NUVEI_CONFIG.merchantId,
             NUVEI_CONFIG.merchantSiteId,
             paymentClientRequestId,
