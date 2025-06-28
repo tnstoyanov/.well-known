@@ -31,6 +31,15 @@ app.use(express.json());
 // Serve static files from the current directory
 app.use(express.static(__dirname));
 
+// Add request logging middleware for debugging
+app.use((req, res, next) => {
+    console.log(`📥 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+    if (req.method === 'POST') {
+        console.log('📋 Request body:', req.body);
+    }
+    next();
+});
+
 // Utility function to generate timestamp
 function generateTimestamp() {
     const now = new Date();
@@ -160,6 +169,10 @@ async function processPayment(sessionToken, mobileToken, amount, currency, billi
 
 // Main endpoint to handle Apple Pay payments
 app.post('/process-apple-pay', async (req, res) => {
+    console.log('🍎 Apple Pay endpoint hit!');
+    console.log('📨 Request headers:', req.headers);
+    console.log('📋 Request body:', req.body);
+    
     try {
         const { mobileToken, billingContact, amount, currency } = req.body;
         
@@ -224,6 +237,20 @@ app.post('/process-apple-pay', async (req, res) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'OK', message: 'Apple Pay Nuvei Server is running' });
+});
+
+// Test endpoint for debugging
+app.get('/test', (req, res) => {
+    res.json({ message: 'Server is working!', timestamp: new Date().toISOString() });
+});
+
+// Test POST endpoint for debugging
+app.post('/test-post', (req, res) => {
+    res.json({ 
+        message: 'POST request received!', 
+        body: req.body,
+        timestamp: new Date().toISOString() 
+    });
 });
 
 // Root endpoint serves index.html
