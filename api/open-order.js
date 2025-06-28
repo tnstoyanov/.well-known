@@ -48,7 +48,7 @@ async function makeNuveiRequest(endpoint, payload) {
     
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // Reduced to 8 seconds
         
         const response = await fetch(url, {
             method: 'POST',
@@ -69,22 +69,29 @@ async function makeNuveiRequest(endpoint, payload) {
         console.log('📥 Response text:', responseText);
         
         if (!response.ok) {
+            console.error(`❌ HTTP Error: ${response.status} ${response.statusText}`);
             throw new Error(`HTTP ${response.status}: ${responseText}`);
         }
         
-        return JSON.parse(responseText);
+        const jsonResponse = JSON.parse(responseText);
+        console.log('✅ Successfully parsed JSON response');
+        return jsonResponse;
         
     } catch (error) {
         if (error.name === 'AbortError') {
-            throw new Error('Request timed out');
+            console.error('❌ Request timed out after 8 seconds');
+            throw new Error('Request timed out - Nuvei API did not respond within 8 seconds');
         }
         console.error('❌ Nuvei API request failed:', error);
+        console.error('❌ Error details:', error.message);
         throw error;
     }
 }
 
 // Serverless function handler - STEP 1: Open Order (called on button click)
 export default async function handler(req, res) {
+    console.log('🚀 OPEN ORDER FUNCTION CALLED at:', new Date().toISOString());
+    
     // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -92,12 +99,14 @@ export default async function handler(req, res) {
     
     // Handle preflight requests
     if (req.method === 'OPTIONS') {
+        console.log('✅ OPTIONS request handled');
         res.status(200).end();
         return;
     }
     
     // Only allow POST requests
     if (req.method !== 'POST') {
+        console.log(`❌ Wrong method: ${req.method}`);
         return res.status(405).json({ 
             error: 'Method not allowed',
             message: `Expected POST, got ${req.method}` 
