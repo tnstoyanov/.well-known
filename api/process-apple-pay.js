@@ -274,7 +274,10 @@ export default async function handler(req, res) {
             currency: "USD",
             paymentOption: {
                 card: {
-                    applePayToken: paymentData
+                    externalToken: {
+                        externalTokenProvider: "ApplePay",
+                        mobileToken: paymentData
+                    }
                 }
             },
             billingAddress: {},
