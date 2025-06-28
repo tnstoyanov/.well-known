@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Pay Nuvei Test - Local</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f7;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #1d1d1f;
+            margin-bottom: 40px;
+        }
+        
+        .payment-section {
+            margin: 40px 0;
+            text-align: center;
+        }
+        
+        .amount-input {
+            margin: 20px 0;
+        }
+        
+        .amount-input input {
+            font-size: 18px;
+            padding: 12px 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            width: 120px;
+            text-align: center;
+        }
+        
+        .apple-pay-button {
+            display: inline-block;
+            appearance: -apple-pay-button;
+            -webkit-appearance: -apple-pay-button;
+            -apple-pay-button-type: buy;
+            -apple-pay-button-style: black;
+            width: 200px;
+            height: 50px;
+            margin: 20px auto;
+            cursor: pointer;
+        }
+        
+        .debug-section {
+            margin-top: 40px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .debug-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .debug-logs {
+            background-color: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .debug-controls {
+            margin-top: 10px;
+        }
+        
+        .debug-controls button {
+            background: #007aff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .status.info {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #bbdefb;
+        }
+        
+        .status.success {
+            background-color: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        
+        .status.error {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+        
+        .backend-url {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍎 Apple Pay + Nuvei Integration Test (Local)</h1>
+        
+        <div class="backend-url">
+            Backend URL: <strong>http://localhost:3000</strong>
+        </div>
+        
+        <div class="payment-section">
+            <div class="amount-input">
+                <label for="amount">Payment Amount: $</label>
+                <input type="number" id="amount" value="10" min="1" max="1000" step="0.01">
+            </div>
+            
+            <div id="apple-pay-button" class="apple-pay-button"></div>
+            
+            <div id="status" class="status info">
+                Ready to test Apple Pay payment
+            </div>
+        </div>
+        
+        <div class="debug-section">
+            <div class="debug-title">🔍 Debug Console</div>
+            <div id="debug-logs" class="debug-logs">Waiting for events...\n</div>
+            <div class="debug-controls">
+                <button onclick="clearDebugLogs()">Clear Logs</button>
+                <button onclick="testBackend()">Test Backend</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const BACKEND_URL = 'http://localhost:3000';
+        
+        // Debug logging
+        let debugLogs = [];
+        
+        function addDebugLog(level, message) {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const logEntry = `[${timestamp}] ${level}: ${message}`;
+            debugLogs.push(logEntry);
+            updateDebugDisplay();
+            
+            // Also send to remote logging if available
+            try {
+                fetch('https://34028ab3c57f9867b19b64a815e6a373.m.pipedream.net', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        timestamp: new Date().toISOString(),
+                        level: level,
+                        message: message,
+                        source: 'apple-pay-local-test'
+                    })
+                }).catch(() => {}); // Silent fail for remote logging
+            } catch (e) {}
+        }
+        
+        function updateDebugDisplay() {
+            const debugElement = document.getElementById('debug-logs');
+            debugElement.textContent = debugLogs.slice(-50).join('\n') + '\n';
+            debugElement.scrollTop = debugElement.scrollHeight;
+        }
+        
+        function clearDebugLogs() {
+            debugLogs = [];
+            updateDebugDisplay();
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+            addDebugLog('STATUS', `${type.toUpperCase()}: ${message}`);
+        }
+        
+        async function testBackend() {
+            addDebugLog('TEST', 'Testing backend connection...');
+            updateStatus('Testing backend connection...', 'info');
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/health`);
+                const data = await response.json();
+                addDebugLog('TEST', `Backend response: ${JSON.stringify(data)}`);
+                updateStatus('Backend is healthy!', 'success');
+            } catch (error) {
+                addDebugLog('ERROR', `Backend test failed: ${error.message}`);
+                updateStatus(`Backend test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Apple Pay functionality
+        function initializeApplePay() {
+            addDebugLog('INIT', 'Initializing Apple Pay...');
+            
+            if (!window.ApplePaySession) {
+                addDebugLog('ERROR', 'Apple Pay not available on this device/browser');
+                updateStatus('Apple Pay not available on this device/browser', 'error');
+                return;
+            }
+            
+            const applePayButton = document.getElementById('apple-pay-button');
+            applePayButton.addEventListener('click', startApplePaySession);
+            
+            addDebugLog('INIT', 'Apple Pay initialized successfully');
+            updateStatus('Apple Pay ready - click the button to test', 'success');
+        }
+        
+        async function startApplePaySession() {
+            addDebugLog('APPLEPAY', 'Starting Apple Pay session...');
+            updateStatus('Starting Apple Pay session...', 'info');
+            
+            try {
+                const amount = document.getElementById('amount').value;
+                if (!amount || amount <= 0) {
+                    throw new Error('Please enter a valid amount');
+                }
+                
+                addDebugLog('APPLEPAY', `Payment amount: $${amount}`);
+                
+                // Step 1: Call openOrder
+                addDebugLog('API', 'Calling openOrder API...');
+                const openOrderResponse = await fetch(`${BACKEND_URL}/api/open-order`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        amount: parseFloat(amount),
+                        currency: 'USD'
+                    })
+                });
+                
+                if (!openOrderResponse.ok) {
+                    const errorText = await openOrderResponse.text();
+                    throw new Error(`OpenOrder failed: ${openOrderResponse.status} ${errorText}`);
+                }
+                
+                const openOrderData = await openOrderResponse.json();
+                addDebugLog('API', `OpenOrder successful: ${JSON.stringify(openOrderData)}`);
+                
+                if (!openOrderData.success || !openOrderData.sessionToken) {
+                    throw new Error('OpenOrder did not return a session token');
+                }
+                
+                // Step 2: Start Apple Pay session
+                const request = {
+                    countryCode: 'US',
+                    currencyCode: 'USD',
+                    supportedNetworks: ['visa', 'masterCard', 'amex', 'discover'],
+                    merchantCapabilities: ['supports3DS'],
+                    total: {
+                        label: 'Test Payment',
+                        amount: amount
+                    }
+                };
+                
+                addDebugLog('APPLEPAY', `Creating Apple Pay session with request: ${JSON.stringify(request)}`);
+                
+                const session = new ApplePaySession(3, request);
+                
+                session.onvalidatemerchant = async (event) => {
+                    addDebugLog('APPLEPAY', `Merchant validation requested for: ${event.validationURL}`);
+                    // For testing, we'll skip merchant validation
+                    // In production, you'd need to implement this
+                    try {
+                        session.completeMerchantValidation({});
+                        addDebugLog('APPLEPAY', 'Merchant validation completed (test mode)');
+                    } catch (error) {
+                        addDebugLog('ERROR', `Merchant validation failed: ${error.message}`);
+                        session.abort();
+                    }
+                };
+                
+                session.onpaymentauthorized = async (event) => {
+                    addDebugLog('APPLEPAY', 'Payment authorized by user');
+                    
+                    try {
+                        const paymentData = event.payment;
+                        addDebugLog('APPLEPAY', `Payment data received: ${JSON.stringify(paymentData, null, 2)}`);
+                        
+                        // Step 3: Process payment with Nuvei
+                        addDebugLog('API', 'Calling process-payment API...');
+                        const paymentResponse = await fetch(`${BACKEND_URL}/api/process-payment`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                sessionToken: openOrderData.sessionToken,
+                                paymentData: JSON.stringify(paymentData.token),
+                                billingContact: paymentData.billingContact,
+                                amount: parseFloat(amount)
+                            })
+                        });
+                        
+                        if (!paymentResponse.ok) {
+                            const errorText = await paymentResponse.text();
+                            throw new Error(`Payment processing failed: ${paymentResponse.status} ${errorText}`);
+                        }
+                        
+                        const paymentResult = await paymentResponse.json();
+                        addDebugLog('API', `Payment result: ${JSON.stringify(paymentResult)}`);
+                        
+                        if (paymentResult.success) {
+                            session.completePayment(ApplePaySession.STATUS_SUCCESS);
+                            updateStatus(`Payment successful! Transaction ID: ${paymentResult.transactionId}`, 'success');
+                            addDebugLog('SUCCESS', `Payment completed successfully: ${paymentResult.transactionId}`);
+                        } else {
+                            session.completePayment(ApplePaySession.STATUS_FAILURE);
+                            updateStatus('Payment failed', 'error');
+                            addDebugLog('ERROR', 'Payment failed');
+                        }
+                        
+                    } catch (error) {
+                        addDebugLog('ERROR', `Payment processing error: ${error.message}`);
+                        session.completePayment(ApplePaySession.STATUS_FAILURE);
+                        updateStatus(`Payment error: ${error.message}`, 'error');
+                    }
+                };
+                
+                session.oncancel = () => {
+                    addDebugLog('APPLEPAY', 'Apple Pay session cancelled by user');
+                    updateStatus('Payment cancelled', 'info');
+                };
+                
+                session.begin();
+                addDebugLog('APPLEPAY', 'Apple Pay session started');
+                
+            } catch (error) {
+                addDebugLog('ERROR', `Apple Pay error: ${error.message}`);
+                updateStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Global error handling
+        window.addEventListener('error', (event) => {
+            addDebugLog('ERROR', `Global error: ${event.error?.message || event.message}`);
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+            addDebugLog('ERROR', `Unhandled promise rejection: ${event.reason}`);
+        });
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            addDebugLog('INIT', 'Page loaded, initializing...');
+            initializeApplePay();
+            testBackend(); // Test backend on load
+        });
+    </script>
+</body>
+</html>
