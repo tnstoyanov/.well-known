@@ -4,21 +4,27 @@
   "description": "Backend server for Apple Pay Nuvei integration",
   "main": "backend-server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node standalone-server.js",
     "backend": "node backend-server.js",
     "dev": "nodemon server.js",
+    "standalone": "node standalone-server.js",
     "generate-cert": "openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'"
   },
   "dependencies": {
-    "express": "^4.18.2",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
+    "express": "^4.21.2",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["apple-pay", "nuvei", "payment", "backend"],
+  "keywords": [
+    "apple-pay",
+    "nuvei",
+    "payment",
+    "backend"
+  ],
   "author": "Tony Stoyanov",
   "license": "MIT"
 }
